@@ -93,7 +93,7 @@ function renderLegend(
         `</g>`,
     )
     .join("");
-  const svg = `<g data-legend>${items}</g>`;
+  const svg = `<g data-legend="true">${items}</g>`;
   return { svg, reserved: verticalSpace + 6 };
 }
 

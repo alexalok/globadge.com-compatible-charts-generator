@@ -58,7 +58,7 @@ function renderLegend(
   const position = legend?.position ?? "top";
   const y = position === "top" ? 8 : 0;
   const reserved = verticalSpace + (position === "bottom" ? 6 : 0);
-  const svg = `<g data-legend transform="translate(0,${y})">${items}</g>`;
+  const svg = `<g data-legend="true" transform="translate(0,${y})">${items}</g>`;
   return { svg, reserved };
 }
 
