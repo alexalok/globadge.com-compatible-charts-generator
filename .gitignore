@@ -1,0 +1,17 @@
+node_modules/
+.wrangler/
+dist/
+build/
+.cache/
+tmp/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+.DS_Store
+.idea/
+.vscode/
+coverage/
+.env
+.env.*.local
+
