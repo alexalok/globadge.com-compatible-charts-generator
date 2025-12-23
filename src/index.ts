@@ -1,10 +1,10 @@
-import { renderLineChart } from "./charts/line";
-import { renderStackedAreaChart } from "./charts/stacked-area";
-import { ChartRequest, LineChartRequest, StackedAreaChartRequest } from "./types";
+import { ChartRequest, Env } from "./types";
+import { generateChart, ChartType } from "./services/chart-service";
+import { saveChart, getChart } from "./services/storage-service";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -16,7 +16,6 @@ const ROUTES = {
 function logError(context: string, err: unknown, extra?: Record<string, unknown>) {
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
-  // Cloudflare Workers `console.error` surfaces in the dashboard logs.
   console.error(
     JSON.stringify({
       level: "error",
@@ -28,8 +27,8 @@ function logError(context: string, err: unknown, extra?: Record<string, unknown>
   );
 }
 
-function jsonResponse(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), {
+function jsonResponse(status: number, data: any) {
+  return new Response(JSON.stringify(data), {
     status,
     headers: {
       "content-type": "application/json",
@@ -49,135 +48,48 @@ function svgResponse(svg: string) {
   });
 }
 
-function normalizeDimensionsInput(payload: any) {
-  const defaultWidth = 800;
-  const defaultHeight = 400;
-  const width = Number(payload?.dimensions?.width ?? defaultWidth);
-  const height = Number(payload?.dimensions?.height ?? defaultHeight);
-  if (!Number.isFinite(width) || !Number.isFinite(height)) {
-    throw new Error("dimensions.width and dimensions.height must be numbers");
-  }
-  return {
-    width,
-    height,
-    margin: payload?.dimensions?.margin,
-    background: payload?.dimensions?.background,
-  };
-}
-
-function normalizeLinePayload(body: ChartRequest): LineChartRequest {
-  // Support legacy Globadge-style payloads: { options, lines }
-  if (!("series" in body) && "lines" in (body as any)) {
-    const options = (body as any).options ?? {};
-    const lines = Array.isArray((body as any).lines) ? (body as any).lines : [];
-    if (lines.length === 0) {
-      throw new Error("series is required and must be an array");
-    }
-
-    const dimensions = normalizeDimensionsInput({ dimensions: options });
-    const x: any = {};
-    const y: any = {};
-    if (options.xAxis?.label) x.label = options.xAxis.label;
-    if (options.timeTicks?.unit) x.unit = options.timeTicks.unit;
-    if (options.timeTicks?.format) x.format = options.timeTicks.format;
-    if (typeof options.timeTicks?.tickCount === "number") x.tickCount = options.timeTicks.tickCount;
-    if (options.yAxis?.label) y.label = options.yAxis.label;
-    if (typeof options.yAxis?.tickCount === "number") y.tickCount = options.yAxis.tickCount;
-    if (options.yAxis?.format) y.format = options.yAxis.format;
-
-    const series = lines.map((line: any, idx: number) => ({
-      id: line.label ?? `series-${idx + 1}`,
-      name: line.label,
-      color: line.color,
-      data: Array.isArray(line.points)
-        ? line.points.map((p: any) => ({ t: p.x, v: p.y }))
-        : [],
-    }));
-
-    return {
-      kind: "line",
-      dimensions,
-      x: x as LineChartRequest["x"],
-      y: { tickCount: 6, ...y },
-      series,
-      grid: {},
-      legend: { show: series.length > 1 },
-    };
-  }
-
-  const dimensions = normalizeDimensionsInput(body);
-  if (!Array.isArray((body as any).series)) {
-    throw new Error("series is required and must be an array");
-  }
-  if (!(body as any).y) {
-    throw new Error("y axis options are required for line charts");
-  }
-  return { ...(body as LineChartRequest), dimensions, kind: "line" };
-}
-
-function normalizeAreaPayload(body: ChartRequest): StackedAreaChartRequest {
-  // Support legacy Globadge-style payloads: { options, areas }
-  if (!("series" in body) && "areas" in (body as any)) {
-    const options = (body as any).options ?? {};
-    const areas = Array.isArray((body as any).areas) ? (body as any).areas : [];
-    if (areas.length === 0) {
-      throw new Error("series is required and must be an array");
-    }
-
-    const dimensions = normalizeDimensionsInput({ dimensions: options });
-    const x: any = {};
-    const y: any = {};
-    if (options.xAxis?.label) x.label = options.xAxis.label;
-    if (options.timeTicks?.unit) x.unit = options.timeTicks.unit;
-    if (options.timeTicks?.format) x.format = options.timeTicks.format;
-    if (typeof options.timeTicks?.tickCount === "number") x.tickCount = options.timeTicks.tickCount;
-    if (options.yAxis?.label) y.label = options.yAxis.label;
-    if (typeof options.yAxis?.tickCount === "number") y.tickCount = options.yAxis.tickCount;
-    if (options.yAxis?.format) y.format = options.yAxis.format;
-
-    const series = areas.map((area: any, idx: number) => ({
-      id: area.label ?? `area-${idx + 1}`,
-      name: area.label,
-      color: area.color,
-      opacity: typeof area.opacity === "number" ? area.opacity : undefined,
-      data: Array.isArray(area.points)
-        ? area.points.map((p: any) => ({ t: p.x, v: p.y }))
-        : [],
-    }));
-
-    return {
-      kind: "stacked-area",
-      dimensions,
-      x: x as StackedAreaChartRequest["x"],
-      y: { tickCount: 6, ...y },
-      series,
-      grid: {},
-      legend: { show: series.length > 1 },
-    };
-  }
-
-  const dimensions = normalizeDimensionsInput(body);
-  if (!Array.isArray((body as any).series)) {
-    throw new Error("series is required and must be an array");
-  }
-  return { ...(body as StackedAreaChartRequest), dimensions, kind: "stacked-area" };
+function getBaseUrl(request: Request): string {
+  const url = new URL(request.url);
+  return `${url.protocol}//${url.host}`;
 }
 
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }
 
-    if (request.method !== "POST") {
-      return jsonResponse(405, "Method not allowed");
+    // Handle GET requests for stored charts
+    // Pattern: /v1/chartgen/{type}/time/{id}
+    const getMatch = url.pathname.match(
+      /^\/v1\/chartgen\/(line|stacked-area)\/time\/(chart_[a-z_]+_[0-9a-f-]+)$/,
+    );
+    if (getMatch && request.method === "GET") {
+      const [, chartTypeRaw, id] = getMatch;
+      const chartType = chartTypeRaw === "line" ? "line" : "stacked-area";
+
+      try {
+        const svg = await getChart(env.CHARTS_BUCKET, chartType, id);
+        if (!svg) {
+          return jsonResponse(404, { error: "Chart not found" });
+        }
+        return svgResponse(svg);
+      } catch (err) {
+        logError("get-chart", err, { chartType, id });
+        return jsonResponse(500, { error: "Failed to retrieve chart" });
+      }
     }
 
+    // Handle POST and PUT requests for chart generation
     const route = ROUTES[url.pathname as keyof typeof ROUTES];
     if (!route) {
-      return jsonResponse(404, "Not found");
+      return jsonResponse(404, { error: "Not found" });
+    }
+
+    if (request.method !== "POST" && request.method !== "PUT") {
+      return jsonResponse(405, { error: "Method not allowed" });
     }
 
     let body: ChartRequest;
@@ -185,26 +97,30 @@ export default {
       body = await request.json<ChartRequest>();
     } catch (err) {
       logError("json-parse", err, { route: url.pathname });
-      return jsonResponse(400, "Invalid JSON body");
+      return jsonResponse(400, { error: "Invalid JSON body" });
     }
 
     try {
-      if (route === "line") {
-        const payload = normalizeLinePayload(body);
-        const { svg } = renderLineChart(payload);
+      const chartType = route as ChartType;
+      const { svg } = generateChart(chartType, body);
+
+      // POST: Return SVG directly
+      if (request.method === "POST") {
         return svgResponse(svg);
       }
-      if (route === "stacked-area") {
-        const payload = normalizeAreaPayload(body);
-        const { svg } = renderStackedAreaChart(payload);
-        return svgResponse(svg);
+
+      // PUT: Save to R2 and return JSON with id and url
+      if (request.method === "PUT") {
+        const baseUrl = getBaseUrl(request);
+        const stored = await saveChart(env.CHARTS_BUCKET, chartType, svg, baseUrl);
+        return jsonResponse(200, stored);
       }
-      return jsonResponse(404, "Not found");
+
+      return jsonResponse(405, { error: "Method not allowed" });
     } catch (err) {
       logError("render-failure", err, { route, bodyShape: Object.keys(body || {}) });
       const message = err instanceof Error ? err.message : "Unexpected error";
-      return jsonResponse(400, message);
+      return jsonResponse(400, { error: message });
     }
   },
 };
-

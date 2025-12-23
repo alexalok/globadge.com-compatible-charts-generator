@@ -111,3 +111,7 @@ export interface ChartResponse {
   height: number;
 }
 
+export interface Env {
+  CHARTS_BUCKET: R2Bucket;
+}
+
