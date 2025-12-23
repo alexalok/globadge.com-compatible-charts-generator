@@ -366,6 +366,17 @@ export function resolveAxisFont(axis: { fontFamily?: string; fontSize?: number }
   };
 }
 
+export function escapeXml(text: string | number | undefined | null): string {
+  if (text == null) return "";
+  const str = String(text);
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export function computeYDomain(values: number[], axis?: NumericAxisOptions): [number, number] {
   if (!values.length) return [0, 1];
   const min = axis?.domain?.[0] ?? Math.min(...values);

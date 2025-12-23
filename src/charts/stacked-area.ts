@@ -10,6 +10,7 @@ import {
   computeYDomain,
   createLinearScale,
   createTimeScale,
+  escapeXml,
   formatDateUTC,
   formatNumber,
   isSameUtcDay,
@@ -88,7 +89,7 @@ function renderLegend(
       (s, idx) =>
         `<g transform="translate(${10 + idx * 140},${fontSize})">` +
         `<rect x="0" y="-${fontSize - 4}" width="16" height="8" rx="2" fill="${s.color ?? DEFAULT_COLORS[idx % DEFAULT_COLORS.length]}" fill-opacity="${s.opacity ?? 0.85}"></rect>` +
-        `<text x="24" y="0" font-size="${fontSize}" font-family="${fontFamily}" fill="#111827">${s.name ?? s.id}</text>` +
+        `<text x="24" y="0" font-size="${fontSize}" font-family="${fontFamily}" fill="#111827">${escapeXml(s.name ?? s.id)}</text>` +
         `</g>`,
     )
     .join("");
@@ -140,10 +141,10 @@ export function renderStackedAreaChart(request: StackedAreaChartRequest): ChartR
   const background = dims.background ?? "#ffffff";
 
   const xAxisLabel = request.x.label
-    ? `<text x="${(width - margin.left - margin.right) / 2 + margin.left}" y="${height - margin.bottom + 30}" text-anchor="middle" font-family="${xFontFamily}" font-size="${xFontSize + 1}" fill="#111827">${request.x.label}</text>`
+    ? `<text x="${(width - margin.left - margin.right) / 2 + margin.left}" y="${height - margin.bottom + 30}" text-anchor="middle" font-family="${xFontFamily}" font-size="${xFontSize + 1}" fill="#111827">${escapeXml(request.x.label)}</text>`
     : "";
   const yAxisLabel = request.y?.label
-    ? `<text transform="translate(${margin.left - 36}, ${(height - margin.top - margin.bottom) / 2 + margin.top}) rotate(-90)" text-anchor="middle" font-family="${yFontFamily}" font-size="${yFontSize + 1}" fill="#111827">${request.y.label}</text>`
+    ? `<text transform="translate(${margin.left - 36}, ${(height - margin.top - margin.bottom) / 2 + margin.top}) rotate(-90)" text-anchor="middle" font-family="${yFontFamily}" font-size="${yFontSize + 1}" fill="#111827">${escapeXml(request.y.label)}</text>`
     : "";
 
   const gridLines = [
@@ -168,14 +169,14 @@ export function renderStackedAreaChart(request: StackedAreaChartRequest): ChartR
   const xTickLabels = xTicks
     .map((t) => {
       const x = xScale(t.getTime());
-      return `<g transform="translate(${x},${height - margin.bottom})"><line y2="6" stroke="${request.x.tickColor ?? "#111827"}"></line><text fill="#111827" font-family="${xFontFamily}" font-size="${xFontSize}" text-anchor="middle" dy="1.2em">${formatDateUTC(t, tickFormat)}</text></g>`;
+      return `<g transform="translate(${x},${height - margin.bottom})"><line y2="6" stroke="${request.x.tickColor ?? "#111827"}"></line><text fill="#111827" font-family="${xFontFamily}" font-size="${xFontSize}" text-anchor="middle" dy="1.2em">${escapeXml(formatDateUTC(t, tickFormat))}</text></g>`;
     })
     .join("");
 
   const yTickLabels = yTicks
     .map((t) => {
       const y = yScale(t);
-      return `<g transform="translate(${margin.left},${y})"><line x2="-6" stroke="${request.y?.tickColor ?? "#111827"}"></line><text fill="#111827" font-family="${yFontFamily}" font-size="${yFontSize}" text-anchor="end" dx="-0.5em" dy="0.32em">${formatNumber(t, request.y?.format)}</text></g>`;
+      return `<g transform="translate(${margin.left},${y})"><line x2="-6" stroke="${request.y?.tickColor ?? "#111827"}"></line><text fill="#111827" font-family="${yFontFamily}" font-size="${yFontSize}" text-anchor="end" dx="-0.5em" dy="0.32em">${escapeXml(formatNumber(t, request.y?.format))}</text></g>`;
     })
     .join("");
 
@@ -198,9 +199,9 @@ export function renderStackedAreaChart(request: StackedAreaChartRequest): ChartR
   const legend = legendInfo.svg;
 
   const svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${title}">`,
-    `<title>${title}</title>`,
-    `<desc>${desc}</desc>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(title)}">`,
+    `<title>${escapeXml(title)}</title>`,
+    `<desc>${escapeXml(desc)}</desc>`,
     `<rect width="100%" height="100%" fill="${background}"></rect>`,
     gridLines ? `<g stroke="${gridColor}" stroke-width="1" stroke-opacity="${gridOpacity}" fill="none">${gridLines}</g>` : "",
     `<g data-axes="true">`,
