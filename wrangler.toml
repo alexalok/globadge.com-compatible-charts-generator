@@ -2,6 +2,12 @@ name = "chart-generator-worker"
 main = "src/index.ts"
 compatibility_date = "2025-12-23"
 
+[triggers]
+crons = ["0 3 * * *"] # Daily cleanup at 03:00 UTC
+
+[vars]
+CHART_RETENTION_MAX_AGE = "1y"
+
 [[r2_buckets]]
 binding = "CHARTS_BUCKET"
 bucket_name = "chartgen-storage"

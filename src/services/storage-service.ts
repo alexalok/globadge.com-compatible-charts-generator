@@ -50,3 +50,40 @@ export async function getChart(
   return await object.text();
 }
 
+export interface DeleteOldChartsResult {
+  deleted: number;
+  scanned: number;
+}
+
+/**
+ * Remove charts older than the provided age, based on the R2 object's uploaded time.
+ */
+export async function deleteChartsOlderThan(
+  bucket: R2Bucket,
+  maxAgeMs: number,
+): Promise<DeleteOldChartsResult> {
+  const now = Date.now();
+  let cursor: string | undefined;
+  let deleted = 0;
+  let scanned = 0;
+
+  do {
+    const page = await bucket.list({ cursor, limit: 1000 });
+    for (const obj of page.objects) {
+      scanned += 1;
+      const uploadedAt = obj.uploaded?.getTime?.();
+      if (typeof uploadedAt !== "number") {
+        continue;
+      }
+      const age = now - uploadedAt;
+      if (age > maxAgeMs) {
+        await bucket.delete(obj.key);
+        deleted += 1;
+      }
+    }
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+
+  return { deleted, scanned };
+}
+

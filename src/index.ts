@@ -1,6 +1,6 @@
 import { ChartRequest, Env } from "./types";
 import { generateChart, ChartType } from "./services/chart-service";
-import { saveChart, getChart } from "./services/storage-service";
+import { saveChart, getChart, deleteChartsOlderThan } from "./services/storage-service";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,6 +12,8 @@ const ROUTES = {
   "/v1/chartgen/line/time": "line",
   "/v1/chartgen/stacked-area/time": "stacked-area",
 } as const;
+
+const DEFAULT_RETENTION_MS = 365 * 24 * 60 * 60 * 1000; // 1 year
 
 function logError(context: string, err: unknown, extra?: Record<string, unknown>) {
   const message = err instanceof Error ? err.message : String(err);
@@ -51,6 +53,52 @@ function svgResponse(svg: string) {
 function getBaseUrl(request: Request): string {
   const url = new URL(request.url);
   return `${url.protocol}//${url.host}`;
+}
+
+function parseRetentionMs(raw?: string): number {
+  if (!raw) {
+    return DEFAULT_RETENTION_MS;
+  }
+  const trimmed = raw.trim().toLowerCase();
+  const match = trimmed.match(/^(\d+)\s*(y|w|d|h|m)$/);
+  if (!match) {
+    throw new Error("CHART_RETENTION_MAX_AGE must look like '30d', '12w', or '1y'");
+  }
+  const value = Number(match[1]);
+  const unit = match[2];
+  const unitMs: Record<string, number> = {
+    m: 60 * 1000, // minutes
+    h: 60 * 60 * 1000,
+    d: 24 * 60 * 60 * 1000,
+    w: 7 * 24 * 60 * 60 * 1000,
+    y: 365 * 24 * 60 * 60 * 1000,
+  };
+  return value * unitMs[unit];
+}
+
+function getRetentionMs(env: Env): number {
+  try {
+    return parseRetentionMs(env.CHART_RETENTION_MAX_AGE);
+  } catch (err) {
+    logError("invalid-retention", err, { raw: env.CHART_RETENTION_MAX_AGE });
+    return DEFAULT_RETENTION_MS;
+  }
+}
+
+async function purgeOldCharts(env: Env, retentionMs: number) {
+  const startedAt = Date.now();
+  const result = await deleteChartsOlderThan(env.CHARTS_BUCKET, retentionMs);
+  const durationMs = Date.now() - startedAt;
+  console.log(
+    JSON.stringify({
+      level: "info",
+      context: "purge-old-charts",
+      retentionMs,
+      ...result,
+      durationMs,
+    }),
+  );
+  return result;
 }
 
 export default {
@@ -122,5 +170,13 @@ export default {
       const message = err instanceof Error ? err.message : "Unexpected error";
       return jsonResponse(400, { error: message });
     }
+  },
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    const retentionMs = getRetentionMs(env);
+    ctx.waitUntil(
+      purgeOldCharts(env, retentionMs).catch((err) => {
+        logError("cron-purge-failed", err, { retentionMs });
+      }),
+    );
   },
 };
