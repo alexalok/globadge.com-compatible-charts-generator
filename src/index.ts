@@ -5,7 +5,7 @@ import { saveChart, getChart, deleteChartsOlderThan } from "./services/storage-s
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
 const ROUTES = {
@@ -27,6 +27,20 @@ function logError(context: string, err: unknown, extra?: Record<string, unknown>
       ...extra,
     }),
   );
+}
+
+function verifyAuth(request: Request, env: Env): boolean {
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader) {
+    return false;
+  }
+  
+  // Support both "Bearer TOKEN" and just "TOKEN" formats
+  const token = authHeader.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : authHeader;
+  
+  return token === env.AUTH_TOKEN;
 }
 
 function jsonResponse(status: number, data: any) {
@@ -128,6 +142,11 @@ export default {
         logError("get-chart", err, { chartType, id });
         return jsonResponse(500, { error: "Failed to retrieve chart" });
       }
+    }
+
+    // Verify authorization for all modifying requests
+    if (!verifyAuth(request, env)) {
+      return jsonResponse(401, { error: "Unauthorized" });
     }
 
     // Handle POST and PUT requests for chart generation

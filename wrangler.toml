@@ -1,4 +1,4 @@
-name = "chart-generator-worker"
+name = "globadge-com-compatible-charts-generator"
 main = "src/index.ts"
 compatibility_date = "2025-12-23"
 
@@ -7,6 +7,7 @@ crons = ["0 3 * * *"] # Daily cleanup at 03:00 UTC
 
 [vars]
 CHART_RETENTION_MAX_AGE = "1y"
+# AUTH_TOKEN = "your-secret-token-here"  # Set via wrangler secret or environment variable
 
 [[r2_buckets]]
 binding = "CHARTS_BUCKET"

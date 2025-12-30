@@ -114,5 +114,6 @@ export interface ChartResponse {
 export interface Env {
   CHARTS_BUCKET: R2Bucket;
   CHART_RETENTION_MAX_AGE?: string;
+  AUTH_TOKEN: string;
 }
 
