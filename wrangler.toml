@@ -13,3 +13,7 @@ CHART_RETENTION_MAX_AGE = "1y"
 binding = "CHARTS_BUCKET"
 bucket_name = "chartgen-storage"
 
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true
